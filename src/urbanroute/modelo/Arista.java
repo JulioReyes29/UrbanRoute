@@ -1,7 +1,9 @@
 package urbanroute.modelo;
 
 /**
- * Representa una conexión directa desde una estación hacia otra
+ * Representa una conexión directa desde una estación hacia otra.
+ * No usa a otras clases.
+ * Es usada por: Estacion y GrafoTransporte.
  */
 public class Arista {
 
