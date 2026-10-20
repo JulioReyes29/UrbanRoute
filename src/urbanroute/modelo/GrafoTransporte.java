@@ -25,32 +25,85 @@ public class GrafoTransporte {
      * Agrega una estación nueva. Devuelve false si el ID ya existe.
      */
     public boolean agregarEstacion(Estacion estacion) {
-        // TODO: se implementa en la etapa 3
-        return false;
+        if (estacion == null || estacion.getId() == null || estacion.getId().isEmpty()) {
+            return false;
+        }
+        boolean agregada = estaciones.insertar(estacion);
+        if (agregada) {
+            cambiosSinGuardar = true;
+        }
+        return agregada;
+    }
+
+    /**
+     * Crea la estación con sus datos y la agrega. Devuelve false si el ID ya existe.
+     */
+    public boolean agregarEstacion(String id, String nombre, String linea, String zona, int capacidad) {
+        return agregarEstacion(new Estacion(id, nombre, linea, zona, capacidad));
     }
 
     /**
      * Conecta dos estaciones en ambos sentidos con el tiempo dado.
+     * Devuelve false si falta alguna estación, son la misma, el tiempo
+     * no es positivo o la conexión ya existe.
      */
     public boolean agregarConexion(String idOrigen, String idDestino, int tiempo) {
-        // TODO: se implementa en la etapa 3 (una Arista en cada extremo)
-        return false;
+        Estacion origen = estaciones.buscar(idOrigen);
+        Estacion destino = estaciones.buscar(idDestino);
+        if (origen == null || destino == null || origen == destino || tiempo <= 0) {
+            return false;
+        }
+        // como el grafo es no dirigido se pone una arista en cada extremo
+        if (!origen.agregarConexion(new Arista(idDestino, tiempo))) {
+            return false;
+        }
+        destino.agregarConexion(new Arista(idOrigen, tiempo));
+        cambiosSinGuardar = true;
+        return true;
     }
 
     /**
-     * Elimina una estación (cierre temporal) y sus conexiones.
+     * Elimina una estación (cierre temporal). Se quita de la tabla hash
+     * y de las listas de conexiones de sus vecinos.
      */
     public boolean eliminarEstacion(String id) {
-        // TODO: se implementa en la etapa 3
-        return false;
+        Estacion estacion = estaciones.buscar(id);
+        if (estacion == null) {
+            return false;
+        }
+        for (int i = 0; i < estacion.getGrado(); i++) {
+            Estacion vecino = estaciones.buscar(estacion.getIdVecino(i));
+            if (vecino != null) {
+                vecino.eliminarConexion(id);
+            }
+        }
+        estaciones.eliminar(id);
+        cambiosSinGuardar = true;
+        return true;
     }
 
     /**
-     * Elimina la conexión entre dos estaciones.
+     * Elimina la conexión entre dos estaciones (en los dos sentidos).
      */
     public boolean eliminarConexion(String idOrigen, String idDestino) {
-        // TODO: se implementa en la etapa 3
-        return false;
+        Estacion origen = estaciones.buscar(idOrigen);
+        Estacion destino = estaciones.buscar(idDestino);
+        if (origen == null || destino == null) {
+            return false;
+        }
+        boolean eliminada = origen.eliminarConexion(idDestino);
+        destino.eliminarConexion(idOrigen);
+        if (eliminada) {
+            cambiosSinGuardar = true;
+        }
+        return eliminada;
+    }
+
+    /**
+     * Cantidad de estaciones del grafo.
+     */
+    public int getCantidadEstaciones() {
+        return estaciones.getCantidad();
     }
 
     /**

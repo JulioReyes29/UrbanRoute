@@ -37,42 +37,68 @@ public class Estacion {
 
     /**
      * Agrega una conexión (arista) hacia otra estación.
+     * No se permite conectar la estación consigo misma ni repetir el destino.
      */
     public boolean agregarConexion(Arista arista) {
-        // TODO: se implementa en la etapa 3
-        return false;
+        if (arista == null || arista.getIdDestino().equals(id)) {
+            return false;
+        }
+        if (buscarPosicion(arista.getIdDestino()) != -1) {
+            return false; // ya existe una conexion con ese destino
+        }
+        conexiones.insertar(arista);
+        return true;
     }
 
     /**
      * Quita la conexión hacia la estación indicada.
      */
     public boolean eliminarConexion(String idDestino) {
-        // TODO: se implementa en la etapa 3
-        return false;
+        int posicion = buscarPosicion(idDestino);
+        if (posicion == -1) {
+            return false;
+        }
+        Arista arista = conexiones.obtener(posicion);
+        return conexiones.eliminar(arista);
     }
 
     /**
      * Cantidad de conexiones directas.
      */
     public int getGrado() {
-        // TODO: se implementa en la etapa 3
-        return 0;
+        return conexiones.tamano();
     }
 
     /**
      * ID de la estación vecina en la posición indicada de las conexiones.
      */
     public String getIdVecino(int indice) {
-        // TODO: se implementa en la etapa 3
-        return null;
+        Arista arista = conexiones.obtener(indice);
+        if (arista == null) {
+            return null;
+        }
+        return arista.getIdDestino();
     }
 
     /**
      * Tiempo de la conexión en la posición indicada.
      */
     public int getTiempoConexion(int indice) {
-        // TODO: se implementa en la etapa 3
-        return 0;
+        Arista arista = conexiones.obtener(indice);
+        if (arista == null) {
+            return 0;
+        }
+        return arista.getTiempo();
+    }
+
+    // posicion de la conexion hacia ese destino, o -1 si no existe
+    private int buscarPosicion(String idDestino) {
+        for (int i = 0; i < conexiones.tamano(); i++) {
+            if (conexiones.obtener(i).getIdDestino().equals(idDestino)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public ListaEnlazada<Arista> getConexiones() {

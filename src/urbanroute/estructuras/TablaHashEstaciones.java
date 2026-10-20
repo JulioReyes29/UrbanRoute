@@ -28,15 +28,37 @@ public class TablaHashEstaciones {
      * Inserta una estación. Devuelve false si ya existe ese ID.
      */
     public boolean insertar(Estacion estacion) {
-        // TODO: se implementa en la etapa 3
-        return false;
+        if (estacion == null || estacion.getId() == null) {
+            return false;
+        }
+        if (buscar(estacion.getId()) != null) {
+            return false;
+        }
+        int posicion = funcionHash(estacion.getId());
+        tabla[posicion].insertar(estacion);
+        cantidad++;
+
+        double factorCarga = (double) cantidad / tabla.length;
+        if (factorCarga > FACTOR_CARGA_MAXIMO) {
+            rehash();
+        }
+        return true;
     }
 
     /**
      * Busca una estación por su ID. Devuelve null si no existe.
      */
     public Estacion buscar(String id) {
-        // TODO: se implementa en la etapa 3
+        if (id == null) {
+            return null;
+        }
+        ListaEnlazada<Estacion> lista = tabla[funcionHash(id)];
+        for (int i = 0; i < lista.tamano(); i++) {
+            Estacion estacion = lista.obtener(i);
+            if (estacion.getId().equals(id)) {
+                return estacion;
+            }
+        }
         return null;
     }
 
@@ -44,16 +66,28 @@ public class TablaHashEstaciones {
      * Elimina la estación con ese ID.
      */
     public boolean eliminar(String id) {
-        // TODO: se implementa en la etapa 3
-        return false;
+        Estacion estacion = buscar(id);
+        if (estacion == null) {
+            return false;
+        }
+        tabla[funcionHash(id)].eliminar(estacion);
+        cantidad--;
+        return true;
     }
 
     /**
      * Devuelve un arreglo con todas las estaciones guardadas.
      */
     public Estacion[] listarTodas() {
-        // TODO: se implementa en la etapa 3
-        return new Estacion[0];
+        Estacion[] todas = new Estacion[cantidad];
+        int k = 0;
+        for (int i = 0; i < tabla.length; i++) {
+            for (int j = 0; j < tabla[i].tamano(); j++) {
+                todas[k] = tabla[i].obtener(j);
+                k++;
+            }
+        }
+        return todas;
     }
 
     /**
@@ -63,15 +97,31 @@ public class TablaHashEstaciones {
         return cantidad;
     }
 
-    // calcula la posicion en la tabla a partir de los caracteres del ID
-    private int funcionHash(String id) {
-        // TODO: se implementa en la etapa 3
-        return 0;
+    /**
+     * Tamaño actual del arreglo de la tabla.
+     */
+    public int getCapacidad() {
+        return tabla.length;
     }
 
-    // duplica el tamaño de la tabla cuando se pasa del factor de carga
+    // calcula la posicion en la tabla a partir de los caracteres del ID
+    private int funcionHash(String id) {
+        int hash = 0;
+        for (int i = 0; i < id.length(); i++) {
+            // se multiplica por 31 y se saca el modulo en cada paso para no desbordar
+            hash = (hash * 31 + id.charAt(i)) % tabla.length;
+        }
+        return hash;
+    }
+
+    // duplica el tamaño de la tabla y vuelve a ubicar todas las estaciones
     private void rehash() {
-        // TODO: se implementa en la etapa 3
+        Estacion[] todas = listarTodas();
+        tabla = crearTabla(tabla.length * 2);
+        for (int i = 0; i < todas.length; i++) {
+            int posicion = funcionHash(todas[i].getId());
+            tabla[posicion].insertar(todas[i]);
+        }
     }
 
     @SuppressWarnings("unchecked")
