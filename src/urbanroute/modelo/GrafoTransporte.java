@@ -114,10 +114,90 @@ public class GrafoTransporte {
     }
 
     /**
-     * Devuelve todas las estaciones del grafo.
+     * Devuelve todas las estaciones del grafo ordenadas por ID.
      */
     public Estacion[] obtenerEstaciones() {
-        return estaciones.listarTodas();
+        Estacion[] lista = estaciones.listarTodas();
+        // ordenamiento por insercion usando el ID
+        for (int i = 1; i < lista.length; i++) {
+            Estacion actual = lista[i];
+            int j = i - 1;
+            while (j >= 0 && lista[j].getId().compareTo(actual.getId()) > 0) {
+                lista[j + 1] = lista[j];
+                j--;
+            }
+            lista[j + 1] = actual;
+        }
+        return lista;
+    }
+
+    /**
+     * Devuelve los IDs de todas las estaciones ordenados.
+     */
+    public String[] obtenerIds() {
+        Estacion[] lista = obtenerEstaciones();
+        String[] ids = new String[lista.length];
+        for (int i = 0; i < lista.length; i++) {
+            ids[i] = lista[i].getId();
+        }
+        return ids;
+    }
+
+    /**
+     * Devuelve los IDs de las estaciones conectadas directamente a la indicada.
+     */
+    public String[] obtenerVecinos(String id) {
+        Estacion estacion = estaciones.buscar(id);
+        if (estacion == null) {
+            return new String[0];
+        }
+        String[] vecinos = new String[estacion.getGrado()];
+        for (int i = 0; i < vecinos.length; i++) {
+            vecinos[i] = estacion.getIdVecino(i);
+        }
+        return vecinos;
+    }
+
+    /**
+     * Tiempo de la conexión entre dos estaciones, o -1 si no están conectadas.
+     */
+    public int obtenerTiempo(String idOrigen, String idDestino) {
+        Estacion origen = estaciones.buscar(idOrigen);
+        if (origen == null) {
+            return -1;
+        }
+        for (int i = 0; i < origen.getGrado(); i++) {
+            if (origen.getIdVecino(i).equals(idDestino)) {
+                return origen.getTiempoConexion(i);
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Cantidad de conexiones del grafo (cada A-B cuenta una vez).
+     */
+    public int getCantidadConexiones() {
+        Estacion[] lista = estaciones.listarTodas();
+        int suma = 0;
+        for (int i = 0; i < lista.length; i++) {
+            suma = suma + lista[i].getGrado();
+        }
+        return suma / 2;
+    }
+
+    /**
+     * Quita todas las conexiones pero deja las estaciones.
+     * Se usa antes de cargar otro archivo de conexiones.
+     */
+    public void quitarConexiones() {
+        Estacion[] lista = estaciones.listarTodas();
+        for (int i = 0; i < lista.length; i++) {
+            while (lista[i].getGrado() > 0) {
+                lista[i].eliminarConexion(lista[i].getIdVecino(0));
+            }
+        }
+        cambiosSinGuardar = true;
     }
 
     /**
