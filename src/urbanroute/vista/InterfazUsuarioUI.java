@@ -10,6 +10,7 @@ import java.io.File;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -20,6 +21,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import org.graphstream.graph.Edge;
 import org.graphstream.graph.Graph;
 import org.graphstream.graph.Node;
@@ -299,7 +301,7 @@ public class InterfazUsuarioUI extends JFrame {
         if (!confirmarCambiosSinGuardar()) {
             return;
         }
-        File archivo = gestorArchivo.elegirArchivo(this);
+        File archivo = elegirArchivoParaCargar();
         if (archivo == null) {
             return; // el usuario cancelo
         }
@@ -318,18 +320,61 @@ public class InterfazUsuarioUI extends JFrame {
 
     // devuelve true si se guardo bien
     private boolean guardarArchivos() {
-        boolean bien = gestorArchivo.guardar(grafo, this);
+        // si falta algun archivo (por ejemplo, se cargo solo el de estaciones) se pregunta donde guardarlo
+        File archivoEstaciones = gestorArchivo.getArchivoEstaciones();
+        if (archivoEstaciones == null) {
+            archivoEstaciones = elegirDondeGuardar("Guardar estaciones como");
+            if (archivoEstaciones == null) {
+                return false; // el usuario cancelo
+            }
+        }
+        File archivoConexiones = gestorArchivo.getArchivoConexiones();
+        if (archivoConexiones == null) {
+            archivoConexiones = elegirDondeGuardar("Guardar conexiones como");
+            if (archivoConexiones == null) {
+                return false;
+            }
+        }
+
+        boolean bien = gestorArchivo.guardar(grafo, archivoEstaciones, archivoConexiones);
+        actualizarBarraEstado();
         if (bien) {
-            actualizarBarraEstado();
             JOptionPane.showMessageDialog(this, "Cambios guardados en:\n"
                     + gestorArchivo.getNombreArchivoEstaciones() + "\n"
                     + gestorArchivo.getNombreArchivoConexiones(),
                     "Guardar", JOptionPane.INFORMATION_MESSAGE);
         } else {
-            JOptionPane.showMessageDialog(this, gestorArchivo.getErrores(),
+            JOptionPane.showMessageDialog(this, gestorArchivo.getErrores()
+                    + "\nLos cambios siguen pendientes.",
                     "No se pudo guardar", JOptionPane.ERROR_MESSAGE);
         }
         return bien;
+    }
+
+    // abre un JFileChooser en la carpeta data. Devuelve null si se cancela
+    private File elegirArchivoParaCargar() {
+        JFileChooser selector = new JFileChooser(new File("data"));
+        selector.setDialogTitle("Cargar archivo CSV");
+        selector.setFileFilter(new FileNameExtensionFilter("Archivos CSV", "csv"));
+        if (selector.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            return selector.getSelectedFile();
+        }
+        return null;
+    }
+
+    // pregunta donde guardar y le agrega .csv si hace falta. Devuelve null si se cancela
+    private File elegirDondeGuardar(String titulo) {
+        JFileChooser selector = new JFileChooser(new File("data"));
+        selector.setDialogTitle(titulo);
+        selector.setFileFilter(new FileNameExtensionFilter("Archivos CSV", "csv"));
+        if (selector.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return null;
+        }
+        File archivo = selector.getSelectedFile();
+        if (!archivo.getName().toLowerCase().endsWith(".csv")) {
+            archivo = new File(archivo.getPath() + ".csv");
+        }
+        return archivo;
     }
 
     // si hay cambios pregunta si se guardan. Devuelve false si el usuario cancela

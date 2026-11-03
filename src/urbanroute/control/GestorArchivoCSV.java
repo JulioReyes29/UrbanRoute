@@ -1,6 +1,5 @@
 package urbanroute.control;
 
-import java.awt.Component;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -10,14 +9,13 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import javax.swing.JFileChooser;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import urbanroute.modelo.Estacion;
 import urbanroute.modelo.GrafoTransporte;
 
 /**
  * Lee y guarda los archivos CSV de estaciones y conexiones.
- * Todo lo que lee lo agrega a través del grafo.
+ * Todo lo que lee lo agrega a través del grafo. No usa nada de la interfaz:
+ * la interfaz elige los archivos y muestra los errores que devuelve getErrores.
  * Colabora con: GrafoTransporte y Estacion.
  * Es usada por: InterfazUsuarioUI.
  */
@@ -37,19 +35,6 @@ public class GestorArchivoCSV {
         archivoEstaciones = new File("data/estaciones.csv");
         archivoConexiones = new File("data/conexiones.csv");
         errores = "";
-    }
-
-    /**
-     * Abre un JFileChooser para elegir un CSV. Devuelve null si se cancela.
-     */
-    public File elegirArchivo(Component padre) {
-        JFileChooser selector = new JFileChooser(new File("data"));
-        selector.setDialogTitle("Cargar archivo CSV");
-        selector.setFileFilter(new FileNameExtensionFilter("Archivos CSV", "csv"));
-        if (selector.showOpenDialog(padre) == JFileChooser.APPROVE_OPTION) {
-            return selector.getSelectedFile();
-        }
-        return null;
     }
 
     /**
@@ -136,33 +121,46 @@ public class GestorArchivoCSV {
     }
 
     /**
-     * Sobrescribe los archivos de origen con los datos actuales del grafo.
-     * Cada conexión se escribe una sola vez (A-B y no también B-A).
-     * Si falta alguno de los archivos se pregunta dónde guardarlo.
+     * Guarda el grafo en los dos archivos que eligió la interfaz.
+     * Primero arma el texto completo de cada archivo y luego lo escribe.
+     * Solo si todo se escribió bien se marca que no hay cambios pendientes.
      */
-    public boolean guardar(GrafoTransporte grafo, Component padre) {
+    public boolean guardar(GrafoTransporte grafo, File archivoEstaciones, File archivoConexiones) {
         errores = "";
-        if (archivoEstaciones == null) {
-            archivoEstaciones = elegirDondeGuardar(padre, "Guardar estaciones como");
-        }
-        if (archivoConexiones == null) {
-            archivoConexiones = elegirDondeGuardar(padre, "Guardar conexiones como");
-        }
         if (archivoEstaciones == null || archivoConexiones == null) {
-            errores = "No se eligió dónde guardar los archivos.";
+            errores = "Falta indicar dónde guardar las estaciones o las conexiones.";
             return false;
         }
 
         Estacion[] estaciones = grafo.obtenerEstaciones();
+        String textoEstaciones = armarTextoEstaciones(estaciones);
+        String textoConexiones = armarTextoConexiones(estaciones);
         try {
-            escribirEstaciones(estaciones);
-            escribirConexiones(estaciones);
+            escribirArchivo(archivoEstaciones, textoEstaciones);
+            escribirArchivo(archivoConexiones, textoConexiones);
         } catch (IOException e) {
             errores = "No se pudo guardar: " + e.getMessage();
-            return false;
+            return false; // los cambios siguen pendientes
         }
+
+        this.archivoEstaciones = archivoEstaciones;
+        this.archivoConexiones = archivoConexiones;
         grafo.setCambiosSinGuardar(false);
         return true;
+    }
+
+    /**
+     * Archivo de estaciones actual (null si todavía no hay uno).
+     */
+    public File getArchivoEstaciones() {
+        return archivoEstaciones;
+    }
+
+    /**
+     * Archivo de conexiones actual (null si todavía no hay uno).
+     */
+    public File getArchivoConexiones() {
+        return archivoConexiones;
     }
 
     /**
@@ -262,53 +260,42 @@ public class GestorArchivoCSV {
         }
     }
 
-    private void escribirEstaciones(Estacion[] estaciones) throws IOException {
-        try (BufferedWriter escritor = crearEscritor(archivoEstaciones)) {
-            escritor.write(ENCABEZADO_ESTACIONES);
-            escritor.newLine();
-            for (int i = 0; i < estaciones.length; i++) {
-                Estacion e = estaciones[i];
-                escritor.write(e.getId() + "," + e.getNombre() + "," + e.getLinea() + ","
-                        + e.getZona() + "," + e.getCapacidad());
-                escritor.newLine();
-            }
+    // una linea por estacion, ordenadas por ID
+    private String armarTextoEstaciones(Estacion[] estaciones) {
+        StringBuilder texto = new StringBuilder();
+        texto.append(ENCABEZADO_ESTACIONES).append("\n");
+        for (int i = 0; i < estaciones.length; i++) {
+            Estacion e = estaciones[i];
+            texto.append(e.getId()).append(",").append(e.getNombre()).append(",")
+                    .append(e.getLinea()).append(",").append(e.getZona()).append(",")
+                    .append(e.getCapacidad()).append("\n");
         }
+        return texto.toString();
     }
 
-    private void escribirConexiones(Estacion[] estaciones) throws IOException {
-        try (BufferedWriter escritor = crearEscritor(archivoConexiones)) {
-            escritor.write(ENCABEZADO_CONEXIONES);
-            escritor.newLine();
-            for (int i = 0; i < estaciones.length; i++) {
-                Estacion e = estaciones[i];
-                for (int j = 0; j < e.getGrado(); j++) {
-                    String vecino = e.getIdVecino(j);
-                    // solo se escribe cuando el ID del origen es menor, asi A-B no sale dos veces
-                    if (e.getId().compareTo(vecino) < 0) {
-                        escritor.write(e.getId() + "," + vecino + "," + e.getTiempoConexion(j));
-                        escritor.newLine();
-                    }
+    // una linea por conexion: A-B se escribe una sola vez (y no tambien B-A)
+    private String armarTextoConexiones(Estacion[] estaciones) {
+        StringBuilder texto = new StringBuilder();
+        texto.append(ENCABEZADO_CONEXIONES).append("\n");
+        for (int i = 0; i < estaciones.length; i++) {
+            Estacion e = estaciones[i];
+            for (int j = 0; j < e.getGrado(); j++) {
+                String vecino = e.getIdVecino(j);
+                // solo se escribe cuando el ID del origen es menor
+                if (e.getId().compareTo(vecino) < 0) {
+                    texto.append(e.getId()).append(",").append(vecino).append(",")
+                            .append(e.getTiempoConexion(j)).append("\n");
                 }
             }
         }
+        return texto.toString();
     }
 
-    private BufferedWriter crearEscritor(File archivo) throws IOException {
-        return new BufferedWriter(new OutputStreamWriter(new FileOutputStream(archivo), StandardCharsets.UTF_8));
-    }
-
-    private File elegirDondeGuardar(Component padre, String titulo) {
-        JFileChooser selector = new JFileChooser(new File("data"));
-        selector.setDialogTitle(titulo);
-        selector.setFileFilter(new FileNameExtensionFilter("Archivos CSV", "csv"));
-        if (selector.showSaveDialog(padre) != JFileChooser.APPROVE_OPTION) {
-            return null;
+    private void escribirArchivo(File archivo, String texto) throws IOException {
+        try (BufferedWriter escritor = new BufferedWriter(
+                new OutputStreamWriter(new FileOutputStream(archivo), StandardCharsets.UTF_8))) {
+            escritor.write(texto);
         }
-        File archivo = selector.getSelectedFile();
-        if (!archivo.getName().toLowerCase().endsWith(".csv")) {
-            archivo = new File(archivo.getPath() + ".csv");
-        }
-        return archivo;
     }
 
     // quita espacios y el BOM que a veces pone Excel al inicio del archivo
