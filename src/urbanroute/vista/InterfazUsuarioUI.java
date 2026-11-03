@@ -17,6 +17,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import org.graphstream.graph.Edge;
@@ -50,7 +51,21 @@ public class InterfazUsuarioUI extends JFrame {
             + "node { size: 14px; fill-color: #4a6fa5; stroke-mode: plain; stroke-color: #2c3e50;"
             + " text-size: 11; text-color: #2c3e50; text-alignment: under;"
             + " text-background-mode: plain; text-background-color: white; }"
-            + "edge { size: 2px; fill-color: #9aa5b1; text-size: 10; text-color: #8a5a00; }";
+            + "edge { size: 2px; fill-color: #9aa5b1; text-size: 10; text-color: #8a5a00; }"
+            // resaltado de la ruta optima
+            + "node.ruta { size: 20px; stroke-color: #C0392B; stroke-width: 3px; text-style: bold; }"
+            + "edge.ruta { size: 5px; fill-color: #C0392B; text-color: #C0392B; text-style: bold; }"
+            // resaltado de los hubs
+            + "node.hub { size: 26px; stroke-color: #1F4E5F; stroke-width: 4px; text-style: bold; text-size: 13; }";
+
+    // un color por subred (si hay mas subredes que colores se repiten)
+    private static final String[] COLORES_SUBREDES = {
+        "#4A6FA5", "#6A994E", "#D08C2D", "#8E5572", "#2A9D8F", "#9C6644", "#7B6D8D", "#B5838D"
+    };
+    // nombre de cada color para mostrarlo en los resultados
+    private static final String[] NOMBRES_COLORES = {
+        "azul", "verde", "naranja", "morado", "turquesa", "marrón", "lila", "rosado"
+    };
 
     private GrafoTransporte grafo;
     private GestorArchivoCSV gestorArchivo;
@@ -74,7 +89,8 @@ public class InterfazUsuarioUI extends JFrame {
     private JTextArea areaResultados;
     private JLabel lblEstado;
 
-    // visor de GraphStream que esta dentro de panelGrafo
+    // grafo de GraphStream que se dibuja y su visor (se crean una sola vez)
+    private Graph dibujo;
     private SwingViewer visor;
 
     /**
@@ -239,6 +255,13 @@ public class InterfazUsuarioUI extends JFrame {
         btnCargar.addActionListener(e -> cargarArchivo());
         btnGuardar.addActionListener(e -> guardarArchivos());
         btnAyuda.addActionListener(e -> mostrarAyuda());
+        btnAgregarEstacion.addActionListener(e -> agregarEstacion());
+        btnEliminarEstacion.addActionListener(e -> eliminarEstacion());
+        btnAgregarConexion.addActionListener(e -> agregarConexion());
+        btnEliminarConexion.addActionListener(e -> eliminarConexion());
+        btnRutaCorta.addActionListener(e -> mostrarRutaMasCorta());
+        btnSubredes.addActionListener(e -> mostrarSubredes());
+        btnHubs.addActionListener(e -> mostrarHubs());
     }
 
     private void mostrarAyuda() {
@@ -336,6 +359,425 @@ public class InterfazUsuarioUI extends JFrame {
         JOptionPane.showMessageDialog(this, scroll, "Avisos de la carga", JOptionPane.WARNING_MESSAGE);
     }
 
+    // ---------------- editar la red ----------------
+
+    private void agregarEstacion() {
+        JTextField txtId = new JTextField();
+        JTextField txtNombre = new JTextField();
+        JTextField txtLinea = new JTextField();
+        JTextField txtZona = new JTextField();
+        JTextField txtCapacidad = new JTextField();
+
+        JPanel formulario = new JPanel(new GridLayout(5, 2, 8, 6));
+        formulario.add(new JLabel("ID:"));
+        formulario.add(txtId);
+        formulario.add(new JLabel("Nombre:"));
+        formulario.add(txtNombre);
+        formulario.add(new JLabel("Línea:"));
+        formulario.add(txtLinea);
+        formulario.add(new JLabel("Zona:"));
+        formulario.add(txtZona);
+        formulario.add(new JLabel("Capacidad (pasajeros/hora):"));
+        formulario.add(txtCapacidad);
+
+        // se repite hasta que los datos sean validos o el usuario cancele
+        while (true) {
+            int opcion = JOptionPane.showConfirmDialog(this, formulario, "Agregar estación",
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (opcion != JOptionPane.OK_OPTION) {
+                return;
+            }
+
+            String id = txtId.getText().trim().toUpperCase();
+            String nombre = txtNombre.getText().trim();
+            String linea = txtLinea.getText().trim();
+            String zona = txtZona.getText().trim();
+            String textoCapacidad = txtCapacidad.getText().trim();
+
+            String error = validarEstacion(id, nombre, linea, zona, textoCapacidad);
+            if (error != null) {
+                mostrarError(error);
+                continue;
+            }
+
+            int capacidad = Integer.parseInt(textoCapacidad);
+            if (!grafo.agregarEstacion(id, nombre, linea, zona, capacidad)) {
+                mostrarError("No se pudo agregar la estación " + id + ".");
+                continue;
+            }
+            actualizarVista();
+            areaResultados.setText("Estación agregada: " + id + " - " + nombre + "\n"
+                    + "Ahora puede conectarla con \"Agregar conexión\".\n");
+            return;
+        }
+    }
+
+    // devuelve el mensaje de error o null si los datos estan bien
+    private String validarEstacion(String id, String nombre, String linea, String zona, String capacidad) {
+        if (id.isEmpty() || nombre.isEmpty() || linea.isEmpty() || zona.isEmpty() || capacidad.isEmpty()) {
+            return "Todos los campos son obligatorios.";
+        }
+        if (id.contains(" ")) {
+            return "El ID no puede tener espacios (puede usar _ por ejemplo LA_P).";
+        }
+        if (tieneComa(id) || tieneComa(nombre) || tieneComa(linea) || tieneComa(zona)) {
+            return "Los datos no pueden tener comas porque se guardan en un archivo CSV.";
+        }
+        if (grafo.buscarEstacion(id) != null) {
+            return "Ya existe una estación con el ID " + id + ".";
+        }
+        int numero;
+        try {
+            numero = Integer.parseInt(capacidad);
+        } catch (NumberFormatException e) {
+            return "La capacidad debe ser un número entero.";
+        }
+        if (numero <= 0) {
+            return "La capacidad debe ser mayor que 0.";
+        }
+        return null;
+    }
+
+    private void eliminarEstacion() {
+        if (grafo.getCantidadEstaciones() == 0) {
+            mostrarError("No hay estaciones para eliminar.");
+            return;
+        }
+        JComboBox<String> combo = new JComboBox<>(grafo.obtenerIds());
+        int opcion = JOptionPane.showConfirmDialog(this, combo, "Elija la estación a eliminar",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (opcion != JOptionPane.OK_OPTION || combo.getSelectedItem() == null) {
+            return;
+        }
+
+        String id = (String) combo.getSelectedItem();
+        int cantidadConexiones = grafo.obtenerVecinos(id).length;
+        int confirmar = JOptionPane.showConfirmDialog(this,
+                "¿Seguro que desea eliminar la estación " + id + "?\n"
+                + "También se eliminarán sus " + cantidadConexiones + " conexiones.",
+                "Confirmar", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirmar != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        if (grafo.eliminarEstacion(id)) {
+            actualizarVista();
+            areaResultados.setText("Estación eliminada (cierre temporal): " + id + "\n"
+                    + "Se quitaron " + cantidadConexiones + " conexiones.\n");
+        } else {
+            mostrarError("No se pudo eliminar la estación " + id + ".");
+        }
+    }
+
+    private void agregarConexion() {
+        if (grafo.getCantidadEstaciones() < 2) {
+            mostrarError("Se necesitan al menos dos estaciones para crear una conexión.");
+            return;
+        }
+        String[] ids = grafo.obtenerIds();
+        JComboBox<String> comboA = new JComboBox<>(ids);
+        JComboBox<String> comboB = new JComboBox<>(ids);
+        JTextField txtTiempo = new JTextField();
+
+        JPanel formulario = new JPanel(new GridLayout(3, 2, 8, 6));
+        formulario.add(new JLabel("Estación origen:"));
+        formulario.add(comboA);
+        formulario.add(new JLabel("Estación destino:"));
+        formulario.add(comboB);
+        formulario.add(new JLabel("Tiempo (minutos):"));
+        formulario.add(txtTiempo);
+
+        while (true) {
+            int opcion = JOptionPane.showConfirmDialog(this, formulario, "Agregar conexión",
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (opcion != JOptionPane.OK_OPTION) {
+                return;
+            }
+
+            String origen = (String) comboA.getSelectedItem();
+            String destino = (String) comboB.getSelectedItem();
+            String error = validarConexion(origen, destino, txtTiempo.getText().trim());
+            if (error != null) {
+                mostrarError(error);
+                continue;
+            }
+
+            int tiempo = Integer.parseInt(txtTiempo.getText().trim());
+            if (!grafo.agregarConexion(origen, destino, tiempo)) {
+                mostrarError("No se pudo agregar la conexión " + origen + " - " + destino + ".");
+                continue;
+            }
+            actualizarVista();
+            areaResultados.setText("Conexión agregada: " + origen + " - " + destino
+                    + " (" + tiempo + " min)\n");
+            return;
+        }
+    }
+
+    // devuelve el mensaje de error o null si los datos estan bien
+    private String validarConexion(String origen, String destino, String textoTiempo) {
+        if (origen == null || destino == null) {
+            return "Debe elegir las dos estaciones.";
+        }
+        if (origen.equals(destino)) {
+            return "El origen y el destino no pueden ser la misma estación.";
+        }
+        if (grafo.obtenerTiempo(origen, destino) != -1) {
+            return "Ya existe una conexión entre " + origen + " y " + destino + ".";
+        }
+        if (textoTiempo.isEmpty()) {
+            return "Debe escribir el tiempo en minutos.";
+        }
+        int tiempo;
+        try {
+            tiempo = Integer.parseInt(textoTiempo);
+        } catch (NumberFormatException e) {
+            return "El tiempo debe ser un número entero de minutos.";
+        }
+        if (tiempo <= 0) {
+            return "El tiempo debe ser mayor que 0.";
+        }
+        return null;
+    }
+
+    private void eliminarConexion() {
+        // se arma la lista de conexiones existentes, cada una una sola vez
+        int total = grafo.getCantidadConexiones();
+        if (total == 0) {
+            mostrarError("No hay conexiones para eliminar.");
+            return;
+        }
+        String[] origenes = new String[total];
+        String[] destinos = new String[total];
+        String[] textos = new String[total];
+        int k = 0;
+        String[] ids = grafo.obtenerIds();
+        for (int i = 0; i < ids.length; i++) {
+            String[] vecinos = grafo.obtenerVecinos(ids[i]);
+            for (int j = 0; j < vecinos.length; j++) {
+                if (ids[i].compareTo(vecinos[j]) < 0) {
+                    origenes[k] = ids[i];
+                    destinos[k] = vecinos[j];
+                    textos[k] = ids[i] + " - " + vecinos[j] + " (" + grafo.obtenerTiempo(ids[i], vecinos[j]) + " min)";
+                    k++;
+                }
+            }
+        }
+
+        JComboBox<String> combo = new JComboBox<>(textos);
+        int opcion = JOptionPane.showConfirmDialog(this, combo, "Elija la conexión a eliminar",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (opcion != JOptionPane.OK_OPTION || combo.getSelectedIndex() < 0) {
+            return;
+        }
+
+        int elegida = combo.getSelectedIndex();
+        int confirmar = JOptionPane.showConfirmDialog(this,
+                "¿Seguro que desea eliminar la conexión " + textos[elegida] + "?",
+                "Confirmar", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirmar != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        if (grafo.eliminarConexion(origenes[elegida], destinos[elegida])) {
+            actualizarVista();
+            areaResultados.setText("Conexión eliminada: " + textos[elegida] + "\n");
+        } else {
+            mostrarError("No se pudo eliminar la conexión.");
+        }
+    }
+
+    private boolean tieneComa(String texto) {
+        return texto.contains(",");
+    }
+
+    private void mostrarError(String mensaje) {
+        JOptionPane.showMessageDialog(this, mensaje, "Dato no válido", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private void mostrarAdvertencia(String titulo, String mensaje) {
+        JOptionPane.showMessageDialog(this, mensaje, titulo, JOptionPane.WARNING_MESSAGE);
+    }
+
+    // ---------------- analisis de la red ----------------
+
+    private void mostrarRutaMasCorta() {
+        String origen = (String) comboOrigen.getSelectedItem();
+        String destino = (String) comboDestino.getSelectedItem();
+        if (origen == null || destino == null) {
+            mostrarAdvertencia("Ruta más corta", "No hay estaciones cargadas.");
+            return;
+        }
+        if (origen.equals(destino)) {
+            mostrarAdvertencia("Ruta más corta", "El origen y el destino son la misma estación (" + origen + ").\n"
+                    + "Elija dos estaciones distintas.");
+            return;
+        }
+
+        quitarResaltados();
+        String[] ruta = analizador.rutaMasCorta(origen, destino);
+        if (ruta == null) {
+            areaResultados.setText("No hay camino entre " + origen + " y " + destino + ".\n"
+                    + "Las dos estaciones están en subredes distintas.\n");
+            mostrarAdvertencia("Ruta más corta", "No existe una ruta entre " + origen + " y " + destino + ".\n"
+                    + "Las dos estaciones no están conectadas (subredes distintas).");
+            return;
+        }
+
+        // primera parte: la ruta completa en una linea
+        String texto = "Ruta más corta de " + origen + " a " + destino + ": ";
+        for (int i = 0; i < ruta.length; i++) {
+            texto = texto + ruta[i];
+            if (i < ruta.length - 1) {
+                texto = texto + " -> ";
+            }
+        }
+        texto = texto + "\nTiempo total: " + analizador.getTiempoUltimaRuta() + " min ("
+                + ruta.length + " estaciones)\n\nDetalle por tramo:\n";
+        // segunda parte: el tiempo de cada tramo
+        for (int i = 0; i < ruta.length - 1; i++) {
+            texto = texto + "  " + ruta[i] + " -> " + ruta[i + 1] + ": "
+                    + grafo.obtenerTiempo(ruta[i], ruta[i + 1]) + " min\n";
+        }
+        areaResultados.setText(texto);
+        areaResultados.setCaretPosition(0);
+        resaltarRuta(ruta);
+    }
+
+    private void mostrarSubredes() {
+        if (grafo.getCantidadEstaciones() == 0) {
+            mostrarAdvertencia("Subredes", "No hay estaciones cargadas.");
+            return;
+        }
+        quitarResaltados();
+        pintarSubredes();
+        String[][] subredes = analizador.buscarSubredes();
+
+        String texto;
+        if (subredes.length == 1) {
+            texto = "La red tiene 1 subred: toda la red está conectada.\n";
+        } else {
+            texto = "La red tiene " + subredes.length + " subredes:\n";
+        }
+        for (int s = 0; s < subredes.length; s++) {
+            texto = texto + "\nSubred " + (s + 1);
+            if (subredes[s].length == 1) {
+                texto = texto + " (1 estación, aislada";
+            } else {
+                texto = texto + " (" + subredes[s].length + " estaciones";
+            }
+            texto = texto + ", color " + NOMBRES_COLORES[s % NOMBRES_COLORES.length] + "):\n";
+            for (int i = 0; i < subredes[s].length; i++) {
+                texto = texto + subredes[s][i];
+                if (i < subredes[s].length - 1) {
+                    texto = texto + ", ";
+                }
+            }
+            texto = texto + "\n";
+        }
+        areaResultados.setText(texto);
+        areaResultados.setCaretPosition(0);
+    }
+
+    private void mostrarHubs() {
+        if (grafo.getCantidadEstaciones() == 0) {
+            mostrarAdvertencia("Hubs", "No hay estaciones cargadas.");
+            return;
+        }
+        quitarResaltados();
+        String[] hubs = analizador.buscarHubs();
+        if (hubs.length == 0) {
+            areaResultados.setText("Hubs: ninguna estación tiene conexiones todavía.\n");
+            return;
+        }
+
+        String texto = "Hubs (grado " + analizador.getGradoHubs() + "): ";
+        for (int i = 0; i < hubs.length; i++) {
+            texto = texto + hubs[i];
+            if (i < hubs.length - 1) {
+                texto = texto + ", ";
+            }
+        }
+        texto = texto + "\n";
+        if (hubs.length > 1) {
+            texto = texto + "Hay un empate entre " + hubs.length + " estaciones.\n";
+        }
+        texto = texto + "\nConexiones de cada hub:\n";
+        for (int i = 0; i < hubs.length; i++) {
+            texto = texto + "- " + hubs[i] + ": conecta con ";
+            String[] vecinos = grafo.obtenerVecinos(hubs[i]);
+            for (int j = 0; j < vecinos.length; j++) {
+                texto = texto + vecinos[j];
+                if (j < vecinos.length - 1) {
+                    texto = texto + ", ";
+                }
+            }
+            texto = texto + "\n";
+            if (dibujo != null && dibujo.getNode(hubs[i]) != null) {
+                dibujo.getNode(hubs[i]).setAttribute("ui.class", "hub");
+            }
+        }
+        areaResultados.setText(texto);
+        areaResultados.setCaretPosition(0);
+    }
+
+    // marca los nodos y aristas de la ruta con la clase "ruta"
+    private void resaltarRuta(String[] ruta) {
+        if (dibujo == null) {
+            return;
+        }
+        for (int i = 0; i < ruta.length; i++) {
+            Node nodo = dibujo.getNode(ruta[i]);
+            if (nodo != null) {
+                nodo.setAttribute("ui.class", "ruta");
+            }
+            if (i < ruta.length - 1) {
+                Edge arista = buscarArista(ruta[i], ruta[i + 1]);
+                if (arista != null) {
+                    arista.setAttribute("ui.class", "ruta");
+                }
+            }
+        }
+    }
+
+    // las aristas se guardan con el ID menor primero
+    private Edge buscarArista(String a, String b) {
+        if (a.compareTo(b) < 0) {
+            return dibujo.getEdge(a + "-" + b);
+        }
+        return dibujo.getEdge(b + "-" + a);
+    }
+
+    // quita el resaltado de ruta y de hubs (los colores de subred se quedan)
+    private void quitarResaltados() {
+        if (dibujo == null) {
+            return;
+        }
+        for (int i = 0; i < dibujo.getNodeCount(); i++) {
+            dibujo.getNode(i).removeAttribute("ui.class");
+        }
+        for (int i = 0; i < dibujo.getEdgeCount(); i++) {
+            dibujo.getEdge(i).removeAttribute("ui.class");
+        }
+    }
+
+    // pinta cada subred de un color distinto
+    private void pintarSubredes() {
+        if (dibujo == null) {
+            return;
+        }
+        String[][] subredes = analizador.buscarSubredes();
+        for (int s = 0; s < subredes.length; s++) {
+            String color = COLORES_SUBREDES[s % COLORES_SUBREDES.length];
+            for (int i = 0; i < subredes[s].length; i++) {
+                Node nodo = dibujo.getNode(subredes[s][i]);
+                if (nodo != null) {
+                    nodo.setAttribute("ui.style", "fill-color: " + color + ";");
+                }
+            }
+        }
+    }
+
     // ---------------- actualizar la vista ----------------
 
     private void actualizarVista() {
@@ -345,12 +787,22 @@ public class InterfazUsuarioUI extends JFrame {
     }
 
     private void llenarCombos() {
+        // se recuerda lo que estaba elegido para dejarlo igual si la estacion sigue existiendo
+        Object origenAnterior = comboOrigen.getSelectedItem();
+        Object destinoAnterior = comboDestino.getSelectedItem();
+
         String[] ids = grafo.obtenerIds();
         comboOrigen.removeAllItems();
         comboDestino.removeAllItems();
         for (int i = 0; i < ids.length; i++) {
             comboOrigen.addItem(ids[i]);
             comboDestino.addItem(ids[i]);
+        }
+        if (origenAnterior != null) {
+            comboOrigen.setSelectedItem(origenAnterior);
+        }
+        if (destinoAnterior != null) {
+            comboDestino.setSelectedItem(destinoAnterior);
         }
     }
 
@@ -366,52 +818,79 @@ public class InterfazUsuarioUI extends JFrame {
                 + "   " + cambios);
     }
 
-    // vuelve a crear el dibujo del grafo con GraphStream
+    // actualiza el dibujo para que tenga las mismas estaciones y conexiones que el grafo
     private void dibujarGrafo() {
-        if (visor != null) {
-            visor.close();
-            visor = null;
+        if (dibujo == null) {
+            if (grafo.getCantidadEstaciones() == 0) {
+                return; // se deja el mensaje del panel
+            }
+            crearVisor();
         }
-        panelGrafo.removeAll();
-
-        if (grafo.getCantidadEstaciones() == 0) {
-            JLabel mensaje = new JLabel("No hay estaciones cargadas", SwingConstants.CENTER);
-            mensaje.setForeground(Color.GRAY);
-            panelGrafo.add(mensaje, BorderLayout.CENTER);
-        } else {
-            Graph dibujo = crearGrafoDibujo();
-            visor = new SwingViewer(dibujo, Viewer.ThreadingModel.GRAPH_IN_ANOTHER_THREAD);
-            visor.enableAutoLayout();
-            ViewPanel vista = (ViewPanel) visor.addDefaultView(false);
-            vista.enableMouseOptions(); // zoom con la rueda del mouse
-            panelGrafo.add(vista, BorderLayout.CENTER);
-        }
-        panelGrafo.revalidate();
-        panelGrafo.repaint();
+        actualizarNodos();
+        actualizarAristas();
+        // si la red cambio, los resaltados viejos ya no sirven
+        quitarResaltados();
+        pintarSubredes();
     }
 
-    // arma el grafo de GraphStream: ID en los nodos y tiempo en las aristas
-    private Graph crearGrafoDibujo() {
-        Graph dibujo = new SingleGraph("RedMetro");
+    // crea el grafo de GraphStream y lo mete en el panel del centro
+    private void crearVisor() {
+        dibujo = new SingleGraph("RedMetro");
         dibujo.setAttribute("ui.stylesheet", ESTILO_GRAFO);
         dibujo.setAttribute("ui.quality");
         dibujo.setAttribute("ui.antialias");
 
+        visor = new SwingViewer(dibujo, Viewer.ThreadingModel.GRAPH_IN_ANOTHER_THREAD);
+        visor.enableAutoLayout();
+        ViewPanel vista = (ViewPanel) visor.addDefaultView(false);
+        vista.enableMouseOptions(); // zoom con la rueda del mouse
+
+        panelGrafo.removeAll();
+        panelGrafo.add(vista, BorderLayout.CENTER);
+        panelGrafo.revalidate();
+        panelGrafo.repaint();
+    }
+
+    // quita los nodos de estaciones eliminadas y agrega los de estaciones nuevas (con su ID)
+    private void actualizarNodos() {
+        // se recorre al reves porque al borrar cambian las posiciones
+        for (int i = dibujo.getNodeCount() - 1; i >= 0; i--) {
+            Node nodo = dibujo.getNode(i);
+            if (grafo.buscarEstacion(nodo.getId()) == null) {
+                dibujo.removeNode(nodo);
+            }
+        }
         String[] ids = grafo.obtenerIds();
         for (int i = 0; i < ids.length; i++) {
-            Node nodo = dibujo.addNode(ids[i]);
-            nodo.setAttribute("ui.label", ids[i]);
+            if (dibujo.getNode(ids[i]) == null) {
+                Node nodo = dibujo.addNode(ids[i]);
+                nodo.setAttribute("ui.label", ids[i]);
+            }
         }
+    }
+
+    // igual que con los nodos pero con las conexiones (tiempo en la etiqueta)
+    private void actualizarAristas() {
+        for (int i = dibujo.getEdgeCount() - 1; i >= 0; i--) {
+            Edge arista = dibujo.getEdge(i);
+            int tiempo = grafo.obtenerTiempo(arista.getNode0().getId(), arista.getNode1().getId());
+            if (tiempo == -1) {
+                dibujo.removeEdge(arista);
+            } else {
+                arista.setAttribute("ui.label", "" + tiempo);
+            }
+        }
+        String[] ids = grafo.obtenerIds();
         for (int i = 0; i < ids.length; i++) {
             String[] vecinos = grafo.obtenerVecinos(ids[i]);
             for (int j = 0; j < vecinos.length; j++) {
                 // cada arista se agrega una sola vez
-                if (ids[i].compareTo(vecinos[j]) < 0) {
-                    Edge arista = dibujo.addEdge(ids[i] + "-" + vecinos[j], ids[i], vecinos[j]);
+                String idArista = ids[i] + "-" + vecinos[j];
+                if (ids[i].compareTo(vecinos[j]) < 0 && dibujo.getEdge(idArista) == null) {
+                    Edge arista = dibujo.addEdge(idArista, ids[i], vecinos[j]);
                     arista.setAttribute("ui.label", "" + grafo.obtenerTiempo(ids[i], vecinos[j]));
                 }
             }
         }
-        return dibujo;
     }
 }
