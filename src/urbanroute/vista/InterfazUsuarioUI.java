@@ -293,8 +293,7 @@ public class InterfazUsuarioUI extends JFrame {
         } else {
             mostrarAvisosDeCarga();
         }
-        areaResultados.setText("Red cargada: " + grafo.getCantidadEstaciones() + " estaciones y "
-                + grafo.getCantidadConexiones() + " conexiones.\n");
+        areaResultados.setText(textoCarga() + "\n");
     }
 
     private void cargarArchivo() {
@@ -313,9 +312,14 @@ public class InterfazUsuarioUI extends JFrame {
         }
         actualizarVista();
         mostrarAvisosDeCarga();
-        areaResultados.setText("Archivo cargado: " + archivo.getName() + "\n"
-                + "La red tiene " + grafo.getCantidadEstaciones() + " estaciones y "
-                + grafo.getCantidadConexiones() + " conexiones.\n");
+        areaResultados.setText(textoCarga() + "\n(archivo " + archivo.getName() + ")\n");
+        JOptionPane.showMessageDialog(this, textoCarga(), "Cargar", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // cada linea de estaciones es un vertice y cada linea de conexiones una arista
+    private String textoCarga() {
+        return "Archivo cargado: " + grafo.getCantidadEstaciones() + " estaciones (vértices) y "
+                + grafo.getCantidadConexiones() + " conexiones (aristas).";
     }
 
     // devuelve true si se guardo bien
@@ -858,8 +862,8 @@ public class InterfazUsuarioUI extends JFrame {
         } else {
             cambios = "Sin cambios pendientes";
         }
-        lblEstado.setText("Estaciones: " + grafo.getCantidadEstaciones()
-                + "   Conexiones: " + grafo.getCantidadConexiones()
+        lblEstado.setText("Estaciones (vértices): " + grafo.getCantidadEstaciones()
+                + "   Conexiones (aristas): " + grafo.getCantidadConexiones()
                 + "   " + cambios);
     }
 

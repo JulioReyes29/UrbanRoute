@@ -14,8 +14,15 @@ import urbanroute.modelo.GrafoTransporte;
 
 /**
  * Lee y guarda los archivos CSV de estaciones y conexiones.
- * Todo lo que lee lo agrega a través del grafo. No usa nada de la interfaz:
- * la interfaz elige los archivos y muestra los errores que devuelve getErrores.
+ * Relación entre el archivo y el grafo:
+ * - Cada línea del archivo de estaciones es un vértice (Estacion). El grafo lo
+ *   guarda en la tabla hash usando su ID como clave.
+ * - Cada línea del archivo de conexiones es una arista no dirigida con peso: se pone
+ *   una Arista en cada extremo y el peso es el tiempo en minutos.
+ * - Al guardar se hace el camino inverso: cada vértice vuelve a ser una línea de
+ *   estaciones y cada arista una línea de conexiones (una sola vez, no A-B y B-A).
+ * No usa nada de la interfaz: la interfaz elige los archivos y muestra los errores
+ * que devuelve getErrores.
  * Colabora con: GrafoTransporte y Estacion.
  * Es usada por: InterfazUsuarioUI.
  */
@@ -102,9 +109,9 @@ public class GestorArchivoCSV {
             while (linea != null) {
                 if (!linea.trim().isEmpty()) {
                     if (esEstaciones) {
-                        procesarLineaEstacion(linea, numeroLinea, grafo);
+                        lineaAVertice(linea, numeroLinea, grafo);
                     } else {
-                        procesarLineaConexion(linea, numeroLinea, grafo);
+                        lineaAArista(linea, numeroLinea, grafo);
                     }
                 }
                 linea = lector.readLine();
@@ -184,8 +191,8 @@ public class GestorArchivoCSV {
         return nombreDe(archivoConexiones);
     }
 
-    // linea de estaciones: crea la Estacion y la agrega con grafo.agregarEstacion
-    private void procesarLineaEstacion(String linea, int numeroLinea, GrafoTransporte grafo) {
+    // linea de estaciones -> vertice: crea la Estacion y la agrega con grafo.agregarEstacion
+    private void lineaAVertice(String linea, int numeroLinea, GrafoTransporte grafo) {
         String[] campos = linea.split(",", -1);
         if (campos.length != 5) {
             agregarError(numeroLinea, "se esperaban 5 campos y hay " + campos.length);
@@ -215,8 +222,8 @@ public class GestorArchivoCSV {
         }
     }
 
-    // linea de conexiones: crea las estaciones que falten (solo con ID) y llama grafo.agregarConexion
-    private void procesarLineaConexion(String linea, int numeroLinea, GrafoTransporte grafo) {
+    // linea de conexiones -> arista: crea las estaciones que falten (solo con ID) y llama grafo.agregarConexion
+    private void lineaAArista(String linea, int numeroLinea, GrafoTransporte grafo) {
         String[] campos = linea.split(",", -1);
         if (campos.length != 3) {
             agregarError(numeroLinea, "se esperaban 3 campos y hay " + campos.length);
