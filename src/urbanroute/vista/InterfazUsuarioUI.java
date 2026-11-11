@@ -6,6 +6,8 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -46,6 +48,8 @@ public class InterfazUsuarioUI extends JFrame {
     private static final Color COLOR_GRAFO = Color.WHITE;
 
     private static final int ANCHO_COLUMNA = 300;
+    // limite para el tiempo de una conexion, asi la suma en Dijkstra no se desborda
+    private static final int TIEMPO_MAXIMO = 999;
 
     // estilo del dibujo del grafo (CSS de GraphStream)
     private static final String ESTILO_GRAFO =
@@ -110,7 +114,14 @@ public class InterfazUsuarioUI extends JFrame {
         setSize(1200, 750);
         setMinimumSize(new Dimension(900, 600));
         setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        // al cerrar se pregunta si hay cambios sin guardar
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                cerrarPrograma();
+            }
+        });
 
         JPanel contenido = new JPanel(new BorderLayout());
         contenido.add(crearBarraSuperior(), BorderLayout.NORTH);
@@ -209,9 +220,9 @@ public class InterfazUsuarioUI extends JFrame {
         btnRutaCorta = new JButton("Ruta más corta");
 
         JPanel lista = crearListaVertical(5);
-        lista.add(new JLabel("Origen:"));
+        lista.add(new JLabel("Estación de origen:"));
         lista.add(comboOrigen);
-        lista.add(new JLabel("Destino:"));
+        lista.add(new JLabel("Estación de destino:"));
         lista.add(comboDestino);
         lista.add(btnRutaCorta);
         return envolverPestana(lista);
@@ -244,7 +255,7 @@ public class InterfazUsuarioUI extends JFrame {
     }
 
     private JLabel crearBarraEstado() {
-        lblEstado = new JLabel("Estaciones: 0   Conexiones: 0   Sin cambios pendientes");
+        lblEstado = new JLabel("Estaciones (vértices): 0   Conexiones (aristas): 0   Sin cambios pendientes");
         lblEstado.setOpaque(true);
         lblEstado.setBackground(COLOR_BARRAS);
         lblEstado.setForeground(Color.WHITE);
@@ -268,14 +279,24 @@ public class InterfazUsuarioUI extends JFrame {
 
     private void mostrarAyuda() {
         JOptionPane.showMessageDialog(this,
-                "Cómo usar UrbanRoute:\n\n"
-                + "- Cargar: abre un CSV de estaciones o de conexiones.\n"
-                + "- Guardar: guarda los cambios en los archivos abiertos.\n"
-                + "- Pestaña Estaciones: agregar o eliminar estaciones y conexiones.\n"
-                + "- Pestaña Rutas: elige Origen y Destino y pulsa Ruta más corta.\n"
-                + "- Pestaña Análisis: Subredes muestra las partes aisladas y\n"
-                + "  Hubs las estaciones con más conexiones.\n"
-                + "- En el grafo puedes arrastrar los nodos y hacer zoom con la rueda del mouse.",
+                "Cómo usar UrbanRoute\n\n"
+                + "Barra superior:\n"
+                + "- Cargar: abre un CSV de estaciones (reemplaza la red) o de conexiones.\n"
+                + "- Guardar: guarda la red actual en los archivos CSV.\n\n"
+                + "Pestaña Estaciones:\n"
+                + "- Agregar estación: escriba ID, nombre, línea, zona y capacidad.\n"
+                + "- Eliminar estación: cierra la estación y quita sus conexiones.\n"
+                + "- Agregar conexión: elija dos estaciones y el tiempo en minutos.\n"
+                + "- Eliminar conexión: elija la conexión de la lista.\n\n"
+                + "Pestaña Rutas:\n"
+                + "- Elija la estación de origen y la de destino y pulse Ruta más corta.\n"
+                + "  La ruta se marca en rojo en el grafo.\n\n"
+                + "Pestaña Análisis:\n"
+                + "- Subredes: muestra las partes de la red que no están conectadas entre sí\n"
+                + "  (cada una de un color).\n"
+                + "- Hubs: muestra las estaciones con más conexiones (se ven más grandes).\n\n"
+                + "Los resultados salen en el cuadro Resultados y la barra de abajo dice\n"
+                + "si hay cambios sin guardar. En el grafo puede arrastrar los nodos.",
                 "Ayuda", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -297,7 +318,7 @@ public class InterfazUsuarioUI extends JFrame {
     }
 
     private void cargarArchivo() {
-        if (!confirmarCambiosSinGuardar()) {
+        if (!confirmarCambiosSinGuardar("cargar otro archivo")) {
             return;
         }
         File archivo = elegirArchivoParaCargar();
@@ -382,17 +403,25 @@ public class InterfazUsuarioUI extends JFrame {
     }
 
     // si hay cambios pregunta si se guardan. Devuelve false si el usuario cancela
-    private boolean confirmarCambiosSinGuardar() {
+    private boolean confirmarCambiosSinGuardar(String accion) {
         if (!grafo.hayCambiosSinGuardar()) {
             return true;
         }
         int opcion = JOptionPane.showConfirmDialog(this,
-                "Hay cambios sin guardar. ¿Desea guardarlos antes de cargar otro archivo?",
+                "Hay cambios sin guardar. ¿Desea guardarlos antes de " + accion + "?",
                 "Cambios sin guardar", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
         if (opcion == JOptionPane.YES_OPTION) {
             return guardarArchivos();
         }
         return opcion == JOptionPane.NO_OPTION;
+    }
+
+    // se llama al cerrar la ventana
+    private void cerrarPrograma() {
+        if (confirmarCambiosSinGuardar("salir")) {
+            dispose();
+            System.exit(0); // tambien termina los hilos de GraphStream
+        }
     }
 
     // muestra los errores de las lineas que no se pudieron cargar
@@ -418,15 +447,15 @@ public class InterfazUsuarioUI extends JFrame {
         JTextField txtCapacidad = new JTextField();
 
         JPanel formulario = new JPanel(new GridLayout(5, 2, 8, 6));
-        formulario.add(new JLabel("ID:"));
+        formulario.add(new JLabel("ID de la estación (ej. PRO):"));
         formulario.add(txtId);
-        formulario.add(new JLabel("Nombre:"));
+        formulario.add(new JLabel("Nombre (ej. Propatria):"));
         formulario.add(txtNombre);
-        formulario.add(new JLabel("Línea:"));
+        formulario.add(new JLabel("Línea (ej. Linea 1):"));
         formulario.add(txtLinea);
-        formulario.add(new JLabel("Zona:"));
+        formulario.add(new JLabel("Zona (ej. Catia):"));
         formulario.add(txtZona);
-        formulario.add(new JLabel("Capacidad (pasajeros/hora):"));
+        formulario.add(new JLabel("Capacidad en pasajeros/hora (ej. 12000):"));
         formulario.add(txtCapacidad);
 
         // se repite hasta que los datos sean validos o el usuario cancele
@@ -454,17 +483,28 @@ public class InterfazUsuarioUI extends JFrame {
                 mostrarError("No se pudo agregar la estación " + id + ".");
                 continue;
             }
-            actualizarVista();
-            areaResultados.setText("Estación agregada: " + id + " - " + nombre + "\n"
-                    + "Ahora puede conectarla con \"Agregar conexión\".\n");
+            confirmarCambio("Se agregó la estación " + id + " - " + nombre + ".",
+                    "Ahora puede conectarla con \"Agregar conexión\".");
             return;
         }
     }
 
     // devuelve el mensaje de error o null si los datos estan bien
     private String validarEstacion(String id, String nombre, String linea, String zona, String capacidad) {
-        if (id.isEmpty() || nombre.isEmpty() || linea.isEmpty() || zona.isEmpty() || capacidad.isEmpty()) {
-            return "Todos los campos son obligatorios.";
+        if (id.isEmpty()) {
+            return "Falta el ID de la estación (ej. PRO).";
+        }
+        if (nombre.isEmpty()) {
+            return "Falta el nombre de la estación.";
+        }
+        if (linea.isEmpty()) {
+            return "Falta la línea de la estación (ej. Linea 1).";
+        }
+        if (zona.isEmpty()) {
+            return "Falta la zona de la estación (ej. Catia).";
+        }
+        if (capacidad.isEmpty()) {
+            return "Falta la capacidad en pasajeros por hora.";
         }
         if (id.contains(" ")) {
             return "El ID no puede tener espacios (puede usar _ por ejemplo LA_P).";
@@ -479,7 +519,7 @@ public class InterfazUsuarioUI extends JFrame {
         try {
             numero = Integer.parseInt(capacidad);
         } catch (NumberFormatException e) {
-            return "La capacidad debe ser un número entero.";
+            return "La capacidad \"" + capacidad + "\" no es válida.\nDebe ser un número entero, por ejemplo 12000.";
         }
         if (numero <= 0) {
             return "La capacidad debe ser mayor que 0.";
@@ -493,7 +533,7 @@ public class InterfazUsuarioUI extends JFrame {
             return;
         }
         JComboBox<String> combo = new JComboBox<>(grafo.obtenerIds());
-        int opcion = JOptionPane.showConfirmDialog(this, combo, "Elija la estación a eliminar",
+        int opcion = JOptionPane.showConfirmDialog(this, conEtiqueta("Estación a cerrar:", combo), "Eliminar estación",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (opcion != JOptionPane.OK_OPTION || combo.getSelectedItem() == null) {
             return;
@@ -502,17 +542,15 @@ public class InterfazUsuarioUI extends JFrame {
         String id = (String) combo.getSelectedItem();
         int cantidadConexiones = grafo.obtenerVecinos(id).length;
         int confirmar = JOptionPane.showConfirmDialog(this,
-                "¿Seguro que desea eliminar la estación " + id + "?\n"
-                + "También se eliminarán sus " + cantidadConexiones + " conexiones.",
-                "Confirmar", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                "¿Seguro que desea cerrar la estación " + id + "? " + textoConexiones(cantidadConexiones),
+                "Confirmar cierre", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirmar != JOptionPane.YES_OPTION) {
             return;
         }
 
         if (grafo.eliminarEstacion(id)) {
-            actualizarVista();
-            areaResultados.setText("Estación eliminada (cierre temporal): " + id + "\n"
-                    + "Se quitaron " + cantidadConexiones + " conexiones.\n");
+            confirmarCambio("Se cerró la estación " + id + ".",
+                    "Se quitaron sus conexiones: " + cantidadConexiones + ".");
         } else {
             mostrarError("No se pudo eliminar la estación " + id + ".");
         }
@@ -529,11 +567,11 @@ public class InterfazUsuarioUI extends JFrame {
         JTextField txtTiempo = new JTextField();
 
         JPanel formulario = new JPanel(new GridLayout(3, 2, 8, 6));
-        formulario.add(new JLabel("Estación origen:"));
+        formulario.add(new JLabel("Estación de origen (ej. PRO):"));
         formulario.add(comboA);
-        formulario.add(new JLabel("Estación destino:"));
+        formulario.add(new JLabel("Estación de destino (ej. PER):"));
         formulario.add(comboB);
-        formulario.add(new JLabel("Tiempo (minutos):"));
+        formulario.add(new JLabel("Tiempo en minutos (ej. 2):"));
         formulario.add(txtTiempo);
 
         while (true) {
@@ -556,9 +594,7 @@ public class InterfazUsuarioUI extends JFrame {
                 mostrarError("No se pudo agregar la conexión " + origen + " - " + destino + ".");
                 continue;
             }
-            actualizarVista();
-            areaResultados.setText("Conexión agregada: " + origen + " - " + destino
-                    + " (" + tiempo + " min)\n");
+            confirmarCambio("Se agregó la conexión " + origen + " - " + destino + " (" + tiempo + " min).", "");
             return;
         }
     }
@@ -568,8 +604,14 @@ public class InterfazUsuarioUI extends JFrame {
         if (origen == null || destino == null) {
             return "Debe elegir las dos estaciones.";
         }
+        if (grafo.buscarEstacion(origen) == null) {
+            return "La estación " + origen + " no existe.";
+        }
+        if (grafo.buscarEstacion(destino) == null) {
+            return "La estación " + destino + " no existe.";
+        }
         if (origen.equals(destino)) {
-            return "El origen y el destino no pueden ser la misma estación.";
+            return "No se puede conectar la estación " + origen + " consigo misma.\nElija dos estaciones distintas.";
         }
         if (grafo.obtenerTiempo(origen, destino) != -1) {
             return "Ya existe una conexión entre " + origen + " y " + destino + ".";
@@ -581,10 +623,13 @@ public class InterfazUsuarioUI extends JFrame {
         try {
             tiempo = Integer.parseInt(textoTiempo);
         } catch (NumberFormatException e) {
-            return "El tiempo debe ser un número entero de minutos.";
+            return "El tiempo \"" + textoTiempo + "\" no es válido.\nDebe ser un número entero de minutos, por ejemplo 2.";
         }
         if (tiempo <= 0) {
-            return "El tiempo debe ser mayor que 0.";
+            return "El tiempo debe ser mayor que 0 minutos.";
+        }
+        if (tiempo > TIEMPO_MAXIMO) {
+            return "El tiempo no puede ser mayor que " + TIEMPO_MAXIMO + " minutos.";
         }
         return null;
     }
@@ -614,7 +659,7 @@ public class InterfazUsuarioUI extends JFrame {
         }
 
         JComboBox<String> combo = new JComboBox<>(textos);
-        int opcion = JOptionPane.showConfirmDialog(this, combo, "Elija la conexión a eliminar",
+        int opcion = JOptionPane.showConfirmDialog(this, conEtiqueta("Conexión a eliminar:", combo), "Eliminar conexión",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (opcion != JOptionPane.OK_OPTION || combo.getSelectedIndex() < 0) {
             return;
@@ -623,14 +668,13 @@ public class InterfazUsuarioUI extends JFrame {
         int elegida = combo.getSelectedIndex();
         int confirmar = JOptionPane.showConfirmDialog(this,
                 "¿Seguro que desea eliminar la conexión " + textos[elegida] + "?",
-                "Confirmar", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                "Confirmar eliminación", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirmar != JOptionPane.YES_OPTION) {
             return;
         }
 
         if (grafo.eliminarConexion(origenes[elegida], destinos[elegida])) {
-            actualizarVista();
-            areaResultados.setText("Conexión eliminada: " + textos[elegida] + "\n");
+            confirmarCambio("Se eliminó la conexión " + textos[elegida] + ".", "");
         } else {
             mostrarError("No se pudo eliminar la conexión.");
         }
@@ -640,8 +684,38 @@ public class InterfazUsuarioUI extends JFrame {
         return texto.contains(",");
     }
 
+    // pone la etiqueta arriba del combo para los dialogos de eliminar
+    private JPanel conEtiqueta(String texto, JComboBox<String> combo) {
+        JPanel panel = new JPanel(new GridLayout(2, 1, 0, 4));
+        panel.add(new JLabel(texto));
+        panel.add(combo);
+        return panel;
+    }
+
+    private String textoConexiones(int cantidad) {
+        if (cantidad == 0) {
+            return "No tiene conexiones.";
+        }
+        if (cantidad == 1) {
+            return "Se eliminará su única conexión.";
+        }
+        return "Se eliminarán sus " + cantidad + " conexiones.";
+    }
+
+    // despues de cada alta o baja: actualiza el grafo y la barra, escribe en Resultados y avisa
+    private void confirmarCambio(String mensaje, String detalle) {
+        actualizarVista();
+        String texto = mensaje + "\n";
+        if (!detalle.isEmpty()) {
+            texto = texto + detalle + "\n";
+        }
+        areaResultados.setText(texto + "Cambios sin guardar: pulse Guardar para escribirlos en el archivo.\n");
+        JOptionPane.showMessageDialog(this, mensaje + "\nRecuerde pulsar Guardar para guardar los cambios.",
+                "Cambio realizado", JOptionPane.INFORMATION_MESSAGE);
+    }
+
     private void mostrarError(String mensaje) {
-        JOptionPane.showMessageDialog(this, mensaje, "Dato no válido", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(this, mensaje, "Dato no válido", JOptionPane.WARNING_MESSAGE);
     }
 
     private void mostrarAdvertencia(String titulo, String mensaje) {
@@ -858,7 +932,7 @@ public class InterfazUsuarioUI extends JFrame {
     private void actualizarBarraEstado() {
         String cambios;
         if (grafo.hayCambiosSinGuardar()) {
-            cambios = "Hay cambios sin guardar";
+            cambios = "Cambios sin guardar";
         } else {
             cambios = "Sin cambios pendientes";
         }

@@ -30,6 +30,8 @@ public class GestorArchivoCSV {
 
     public static final String ENCABEZADO_ESTACIONES = "ID_Estacion,Nombre,Linea,Zona,Capacidad_Pasajeros_Hora";
     public static final String ENCABEZADO_CONEXIONES = "Estacion_Origen,Estacion_Destino,Tiempo_Minutos";
+    // limite para el tiempo de una conexion, asi la suma en Dijkstra no se desborda
+    private static final int TIEMPO_MAXIMO = 999;
 
     private File archivoEstaciones;
     private File archivoConexiones;
@@ -249,6 +251,10 @@ public class GestorArchivoCSV {
         }
         if (tiempo <= 0) {
             agregarError(numeroLinea, "el tiempo debe ser mayor que 0");
+            return;
+        }
+        if (tiempo > TIEMPO_MAXIMO) {
+            agregarError(numeroLinea, "el tiempo no puede ser mayor que " + TIEMPO_MAXIMO + " minutos");
             return;
         }
 
