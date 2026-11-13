@@ -12,7 +12,10 @@ import urbanroute.modelo.GrafoTransporte;
  */
 public class AnalizadorRedUrbana {
 
-    // valor que se usa como "infinito" en Dijkstra
+    // Valor que se usa como "infinito" en Dijkstra: distancia de las estaciones que todavía
+    // no se alcanzan. Es el mayor int de Java (2^31 - 1 = 2147483647).
+    // Fuente: documentación de Integer.MAX_VALUE (Oracle, Java SE 17)
+    // https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/Integer.html#MAX_VALUE
     private static final int INFINITO = Integer.MAX_VALUE;
 
     private GrafoTransporte grafo;
@@ -31,6 +34,10 @@ public class AnalizadorRedUrbana {
     /**
      * Ruta de menor tiempo con Dijkstra. Devuelve los IDs en orden,
      * o null si no hay camino.
+     * Se usa Dijkstra porque las conexiones tienen peso (minutos) y ninguno es negativo.
+     * Versión con arreglos (distancia, visitado, anterior), sin cola de prioridad: O(n^2).
+     * Fuente: Dijkstra, E. W. (1959). A note on two problems in connexion with graphs.
+     * Numerische Mathematik, 1, 269-271. https://doi.org/10.1007/BF01386390
      */
     public String[] rutaMasCorta(String idOrigen, String idDestino) {
         tiempoUltimaRuta = 0;
@@ -97,6 +104,10 @@ public class AnalizadorRedUrbana {
 
     /**
      * Busca las subredes aisladas con BFS. Cada fila tiene los IDs de una subred.
+     * Cada vez que se encuentra una estación sin visitar se lanza un BFS nuevo,
+     * así que la cantidad de BFS es la cantidad de componentes conexos.
+     * Fuente: Cormen et al., Introduction to Algorithms (3.ª ed.), cap. 22
+     * "Elementary Graph Algorithms" (búsqueda en anchura).
      */
     public String[][] buscarSubredes() {
         Estacion[] estaciones = grafo.obtenerEstaciones();
@@ -173,7 +184,8 @@ public class AnalizadorRedUrbana {
         return gradoHubs;
     }
 
-    // BFS desde la estacion inicio: marca con el numero de subred a todas las que alcanza
+    // BFS desde la estacion inicio: marca con el numero de subred a todas las que alcanza.
+    // Usa la Cola propia: se visitan primero los vecinos directos y luego los de mas lejos
     private void recorrerBFS(Estacion[] estaciones, int inicio, int subred, int[] numeroSubred) {
         Cola<Integer> cola = new Cola<>();
         cola.encolar(inicio);
@@ -219,6 +231,9 @@ public class AnalizadorRedUrbana {
         return -1;
     }
 
+    /**
+     * Cambia el grafo que se analiza.
+     */
     public void setGrafo(GrafoTransporte grafo) {
         this.grafo = grafo;
     }

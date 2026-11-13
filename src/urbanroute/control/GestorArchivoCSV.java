@@ -14,6 +14,8 @@ import urbanroute.modelo.GrafoTransporte;
 
 /**
  * Lee y guarda los archivos CSV de estaciones y conexiones.
+ * Formato CSV simple (una línea por registro, campos separados por coma, sin comillas),
+ * basado en RFC 4180 (2005) https://www.rfc-editor.org/rfc/rfc4180
  * Relación entre el archivo y el grafo:
  * - Cada línea del archivo de estaciones es un vértice (Estacion). El grafo lo
  *   guarda en la tabla hash usando su ID como clave.
@@ -28,9 +30,16 @@ import urbanroute.modelo.GrafoTransporte;
  */
 public class GestorArchivoCSV {
 
+    /**
+     * Primera línea que debe tener el archivo de estaciones (formato dado en el enunciado).
+     */
     public static final String ENCABEZADO_ESTACIONES = "ID_Estacion,Nombre,Linea,Zona,Capacidad_Pasajeros_Hora";
+    /**
+     * Primera línea que debe tener el archivo de conexiones (formato dado en el enunciado).
+     */
     public static final String ENCABEZADO_CONEXIONES = "Estacion_Origen,Estacion_Destino,Tiempo_Minutos";
-    // limite para el tiempo de una conexion, asi la suma en Dijkstra no se desborda
+    // Limite para el tiempo de una conexion (valor propio, no viene de una fuente).
+    // Asi la suma de tiempos en Dijkstra nunca pasa de Integer.MAX_VALUE y no se desborda.
     private static final int TIEMPO_MAXIMO = 999;
 
     private File archivoEstaciones;
@@ -195,6 +204,9 @@ public class GestorArchivoCSV {
 
     // linea de estaciones -> vertice: crea la Estacion y la agrega con grafo.agregarEstacion
     private void lineaAVertice(String linea, int numeroLinea, GrafoTransporte grafo) {
+        // el -1 hace que split conserve los campos vacios del final ("A,B," da 3 campos y no 2),
+        // asi se detecta el dato que falta. Fuente: documentacion de String.split(String, int)
+        // https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/String.html#split(java.lang.String,int)
         String[] campos = linea.split(",", -1);
         if (campos.length != 5) {
             agregarError(numeroLinea, "se esperaban 5 campos y hay " + campos.length);
@@ -226,6 +238,7 @@ public class GestorArchivoCSV {
 
     // linea de conexiones -> arista: crea las estaciones que falten (solo con ID) y llama grafo.agregarConexion
     private void lineaAArista(String linea, int numeroLinea, GrafoTransporte grafo) {
+        // -1 para conservar los campos vacios (ver lineaAVertice)
         String[] campos = linea.split(",", -1);
         if (campos.length != 3) {
             agregarError(numeroLinea, "se esperaban 3 campos y hay " + campos.length);
@@ -311,9 +324,11 @@ public class GestorArchivoCSV {
         }
     }
 
-    // quita espacios y el BOM que a veces pone Excel al inicio del archivo
+    // Quita espacios y el BOM que a veces pone Excel al inicio del archivo.
+    // El BOM es el caracter invisible U+FEFF; si no se quita, el encabezado no se reconoce.
+    // Fuente: Unicode, preguntas frecuentes sobre UTF y BOM https://www.unicode.org/faq/utf_bom.html
     private String limpiarEncabezado(String encabezado) {
-        if (encabezado.startsWith("﻿")) {
+        if (encabezado.startsWith("\uFEFF")) {
             encabezado = encabezado.substring(1);
         }
         return encabezado.replace(" ", "");

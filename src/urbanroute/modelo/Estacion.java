@@ -101,42 +101,72 @@ public class Estacion {
         return -1;
     }
 
+    /**
+     * Lista de adyacencia de la estación (sus aristas).
+     */
     public ListaEnlazada<Arista> getConexiones() {
         return conexiones;
     }
 
+    /**
+     * ID de la estación (clave en la tabla hash).
+     */
     public String getId() {
         return id;
     }
 
+    /**
+     * Nombre de la estación.
+     */
     public String getNombre() {
         return nombre;
     }
 
+    /**
+     * Cambia el nombre de la estación.
+     */
     public void setNombre(String nombre) {
         this.nombre = nombre;
     }
 
+    /**
+     * Línea del metro a la que pertenece.
+     */
     public String getLinea() {
         return linea;
     }
 
+    /**
+     * Cambia la línea de la estación.
+     */
     public void setLinea(String linea) {
         this.linea = linea;
     }
 
+    /**
+     * Zona donde está la estación.
+     */
     public String getZona() {
         return zona;
     }
 
+    /**
+     * Cambia la zona de la estación.
+     */
     public void setZona(String zona) {
         this.zona = zona;
     }
 
+    /**
+     * Capacidad en pasajeros por hora.
+     */
     public int getCapacidad() {
         return capacidad;
     }
 
+    /**
+     * Cambia la capacidad de la estación.
+     */
     public void setCapacidad(int capacidad) {
         this.capacidad = capacidad;
     }

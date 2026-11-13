@@ -8,6 +8,9 @@ import urbanroute.vista.InterfazUsuarioUI;
  */
 public class Main {
 
+    /**
+     * Abre la ventana del programa.
+     */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new InterfazUsuarioUI().setVisible(true));
     }

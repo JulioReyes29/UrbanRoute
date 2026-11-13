@@ -5,12 +5,33 @@ import urbanroute.modelo.Estacion;
 /**
  * Tabla hash propia que guarda las estaciones usando su ID como clave.
  * Las colisiones se resuelven por encadenamiento separado (una lista por posición).
+ * <p>
+ * Valores usados y su fuente:
+ * <ul>
+ * <li>Función hash (hash * 31 + c): es la fórmula de String.hashCode() de Java,
+ * s[0]*31^(n-1) + ... + s[n-1], calculada con el método de Horner. Se usa 31 porque
+ * es primo e impar y reparte bien los IDs (con los datos del metro, las 44 estaciones
+ * quedan en 33 posiciones distintas). Fuente: Oracle, documentación de String (Java SE 17)
+ * https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/String.html#hashCode()
+ * y J. Bloch, Effective Java, 3.ª ed., Item 11.</li>
+ * <li>Capacidad inicial 16: es el valor por defecto de HashMap. Con 44 estaciones la
+ * tabla crece 16, 32, 64. Fuente: Oracle, documentación de HashMap (Java SE 17)
+ * https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/HashMap.html</li>
+ * <li>Factor de carga máximo 0.75: si cantidad / tamaño pasa de 0.75 se hace rehash
+ * (se duplica la tabla). Con encadenamiento buscar cuesta en promedio O(1 + factor de carga),
+ * así que las listas quedan cortas sin desperdiciar espacio. Fuente: misma documentación
+ * de HashMap ("a good tradeoff between time and space costs") y Cormen et al.,
+ * Introduction to Algorithms, 3.ª ed., cap. 11 "Hash Tables".</li>
+ * </ul>
  * Colabora con: Estacion.
  * Es usada por: GrafoTransporte.
  */
 public class TablaHashEstaciones {
 
+    // capacidad inicial 16, igual que HashMap (fuente en el Javadoc de la clase)
     private static final int CAPACIDAD_INICIAL = 16;
+
+    // si cantidad / tamaño pasa de 0.75 se hace rehash (fuente en el Javadoc de la clase)
     private static final double FACTOR_CARGA_MAXIMO = 0.75;
 
     private ListaEnlazada<Estacion>[] tabla;
@@ -104,7 +125,8 @@ public class TablaHashEstaciones {
         return tabla.length;
     }
 
-    // calcula la posicion en la tabla a partir de los caracteres del ID
+    // Calcula la posición en la tabla a partir de los caracteres del ID (hash polinomial
+    // con 31, igual que String.hashCode(); fuente en el Javadoc de la clase).
     private int funcionHash(String id) {
         int hash = 0;
         for (int i = 0; i < id.length(); i++) {

@@ -208,10 +208,16 @@ public class GrafoTransporte {
         cambiosSinGuardar = false;
     }
 
+    /**
+     * Indica si hubo cambios después de la última carga o guardado.
+     */
     public boolean hayCambiosSinGuardar() {
         return cambiosSinGuardar;
     }
 
+    /**
+     * Marca si hay cambios pendientes (lo usa el gestor al cargar o guardar).
+     */
     public void setCambiosSinGuardar(boolean cambiosSinGuardar) {
         this.cambiosSinGuardar = cambiosSinGuardar;
     }
